@@ -1,0 +1,323 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pg_trgm]
+}
+
+// ─── 사용자 & 인증 ─────────────────────────
+
+model User {
+  id             String       @id @default(cuid())
+  emailHash      String?      @unique
+  emailEncrypted String?
+  emailDomain    EmailDomain?
+  role           Role         @default(USER)
+  status         UserStatus   @default(ACTIVE)
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  devices              Device[]
+  workplacesCreated    Workplace[]         @relation("CreatedWorkplaces")
+  reviews              Review[]
+  comments             Comment[]
+  deletionRequests     DeletionRequest[]   @relation("Requester")
+  reviewedDeletions    DeletionRequest[]   @relation("Reviewer")
+  reviewParticipations ReviewParticipant[]
+
+  @@index([status])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
+enum EmailDomain {
+  EWHA_AC_KR
+  EWHAIN_NET
+}
+
+model Device {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceTokenHash String   @unique
+  userAgent       String?
+  lastUsedAt      DateTime @default(now())
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model OtpCode {
+  id                String    @id @default(cuid())
+  emailHash         String
+  codeHash          String
+  expiresAt         DateTime
+  attemptsRemaining Int       @default(3)
+  consumedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([emailHash])
+  @@index([expiresAt])
+}
+
+// ─── 근로지 ─────────────────────────
+
+model Workplace {
+  id                     String            @id @default(cuid())
+  name                   String // "서부교육지원청"
+  department             String? // "학교시설지원과" (선택)
+  externalPlaceId        String? // 네이버 link URL. 수동 등록은 null
+  isManualEntry          Boolean           @default(false)
+  address                String
+  latitude               Float
+  longitude              Float
+  city                   String // "서울특별시" / "경기도" 등 1차 행정구역
+  district               String // "서대문구" / "고양시 일산동구" 등 2차 행정구역
+  category               WorkplaceCategory
+  transitMinFromMainGate Int?
+  transitMinFromBackGate Int?
+  createdById            String
+  createdBy              User              @relation("CreatedWorkplaces", fields: [createdById], references: [id])
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  reviews Review[]
+
+  // PG: NULL은 unique 검사에서 distinct로 취급되므로, 동일 외부ID에 부서 다른 row 자동 허용.
+  // 부서 null인 default row 중복은 애플리케이션에서 findFirst로 사전 차단.
+  @@unique([externalPlaceId, department], name: "external_dept_unique")
+  @@index([city])
+  @@index([district])
+  @@index([category])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+enum WorkplaceCategory {
+  ON_CAMPUS
+  OFF_CAMPUS
+}
+
+// ─── 후기 ─────────────────────────
+
+model Review {
+  id          String    @id @default(cuid())
+  workplaceId String
+  workplace   Workplace @relation(fields: [workplaceId], references: [id])
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+
+  isAdminEntry Boolean @default(false) // 어드민 영역에서만 노출
+
+  // 근무 시기 (어드민 entry는 null 허용)
+  // workYearPublic / workTermPublic이 false면 일반 사용자에게 "비공개"로 표시
+  workPeriodType WorkPeriodType?
+  workYear       Int?
+  workYearPublic Boolean         @default(true)
+  workTerm       WorkTerm?
+  workTermPublic Boolean         @default(true)
+  workDuration   WorkDuration?
+
+  // 분위 (일반 사용자는 필수, 어드민은 null 허용)
+  // incomeBracketPublic이 false면 일반 사용자에게는 "비공개"로 표시, 어드민만 값 확인 가능
+  incomeBracket       IncomeBracket?
+  incomeBracketPublic Boolean        @default(true)
+
+  // 업무 — OTHER 선택 시 부가 설명 (20자 이상)
+  tasks          TaskType[]
+  tasksOtherText String?    @db.Text
+
+  // 자율도 & 공부
+  autonomyScore    Int?
+  studyPossibility StudyPossibility?
+
+  // 근무 환경
+  workEnvironment WorkEnvironment?
+  coworkerTypes   CoworkerType[]
+
+  // 추천
+  recommendedFor RecommendTag[]
+  overallRating  Int?
+
+  // 자유 작성
+  freeText String? @db.Text
+
+  // 상태
+  status    ReviewStatus @default(PUBLISHED)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  comments         Comment[]
+  participants     ReviewParticipant[]
+  deletionRequests DeletionRequest[]
+
+  @@index([workplaceId])
+  @@index([authorId])
+  @@index([status])
+  @@index([isAdminEntry])
+  @@index([freeText(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+enum WorkPeriodType {
+  SEMESTER
+  INTENSIVE
+  BOTH
+}
+
+enum WorkTerm {
+  SPRING
+  FALL
+  SUMMER
+  WINTER
+}
+
+enum WorkDuration {
+  ONE_SEMESTER
+  TWO_SEMESTERS
+  YEAR_PLUS
+}
+
+enum IncomeBracket {
+  LOW
+  MID
+  HIGH
+  // UNDISCLOSED 제거 — 공개 여부는 Review.incomeBracketPublic 필드로 처리
+}
+
+enum TaskType {
+  OFFICE
+  PHONE
+  IN_PERSON
+  RESEARCH
+  WRITING
+  EVENT
+  REPETITIVE
+  SAFETY
+  PROFESSIONAL
+  OTHER
+}
+
+enum StudyPossibility {
+  POSSIBLE
+  LIMITED
+  IMPOSSIBLE
+}
+
+enum WorkEnvironment {
+  ALONE
+  WITH_PEERS
+  WITH_STAFF
+}
+
+enum CoworkerType {
+  STAFF
+  STUDENT
+  EXTERNAL
+}
+
+enum RecommendTag {
+  STUDY_FRIENDLY
+  ACTIVE_WORK
+  LIKES_PEOPLE
+  AVOIDS_PEOPLE
+  NEW_EXPERIENCE
+  CAREER_FIT
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  PENDING_DELETION
+  DELETED
+}
+
+// ─── 후기별 닉네임 풀 ─────────────────────────
+
+model ReviewParticipant {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  nickname  String // "익명1", "익명2"... (해당 review 내 순번)
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+  @@index([reviewId])
+}
+
+// ─── 댓글 ─────────────────────────
+
+model Comment {
+  id        String        @id @default(cuid())
+  reviewId  String
+  review    Review        @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id])
+  content   String        @db.Text
+  status    CommentStatus @default(PUBLISHED)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  deletionRequests DeletionRequest[]
+
+  @@index([reviewId])
+  @@index([authorId])
+}
+
+enum CommentStatus {
+  PUBLISHED
+  PENDING_DELETION
+  DELETED
+}
+
+// ─── 삭제 요청 ─────────────────────────
+
+model DeletionRequest {
+  id         String             @id @default(cuid())
+  targetType DeletionTargetType
+  reviewId   String?
+  review     Review?            @relation(fields: [reviewId], references: [id])
+  commentId  String?
+  comment    Comment?           @relation(fields: [commentId], references: [id])
+
+  requesterId String
+  requester   User   @relation("Requester", fields: [requesterId], references: [id])
+  reason      String @db.Text
+
+  status       DeletionStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?          @relation("Reviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  adminNote    String?        @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+  @@index([requesterId])
+}
+
+enum DeletionTargetType {
+  REVIEW
+  COMMENT
+}
+
+enum DeletionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
