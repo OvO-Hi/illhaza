@@ -42,6 +42,17 @@ type WorkplaceCandidate = {
   category: "ON_CAMPUS" | "OFF_CAMPUS";
 };
 
+type NaverPlaceLite = {
+  id: string;
+  placeName: string;
+  addressName: string;
+  roadAddressName: string;
+  latitude: number;
+  longitude: number;
+  city: string;
+  district: string;
+};
+
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from(
   { length: CURRENT_YEAR - 2015 + 1 },
@@ -82,6 +93,13 @@ export function ExtractedCardEditor({
     "ON_CAMPUS" | "OFF_CAMPUS" | null
   >(null);
   const [submittingManual, setSubmittingManual] = useState(false);
+
+  // 네이버 검색 (수동 등록 폼 안에서)
+  const [naverSearching, setNaverSearching] = useState(false);
+  const [naverSearched, setNaverSearched] = useState(false);
+  const [naverResults, setNaverResults] = useState<NaverPlaceLite[]>([]);
+  const [selectedNaverPlace, setSelectedNaverPlace] =
+    useState<NaverPlaceLite | null>(null);
 
   // ─── 작은 헬퍼 ─────────────────────────────
   const update = <K extends keyof ExtractedReview>(
@@ -129,6 +147,40 @@ export function ExtractedCardEditor({
     toast.success("근로지 매칭 완료");
   };
 
+  const handleNaverSearch = async () => {
+    const q = mName.trim();
+    if (!q || naverSearching) return;
+    setNaverSearching(true);
+    setNaverSearched(false);
+    try {
+      const res = await fetch(
+        `/api/workplaces/search?q=${encodeURIComponent(q)}&includeExternal=true`,
+      );
+      const data: {
+        external?: NaverPlaceLite[];
+        error?: string;
+      } = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "검색 실패");
+        return;
+      }
+      setNaverResults(data.external ?? []);
+      setNaverSearched(true);
+    } catch {
+      toast.error("네트워크 오류");
+    } finally {
+      setNaverSearching(false);
+    }
+  };
+
+  const fillFromNaverPlace = (place: NaverPlaceLite) => {
+    setMRoadAddress(place.roadAddressName || place.addressName);
+    setMCity(place.city);
+    setMDistrict(place.district);
+    setSelectedNaverPlace(place);
+    setNaverResults([]);
+  };
+
   const submitManual = async () => {
     if (submittingManual) return;
     const name = mName.trim();
@@ -157,18 +209,38 @@ export function ExtractedCardEditor({
     }
     setSubmittingManual(true);
     try {
+      // 네이버에서 선택한 경우 → external 모드 (좌표 재사용, Geocoding 생략)
+      // 아니면 → manual 모드 (서버에서 Geocoding 호출)
+      const body = selectedNaverPlace
+        ? {
+            mode: "external" as const,
+            externalPlaceId: selectedNaverPlace.id,
+            externalData: {
+              placeName: name,
+              addressName: selectedNaverPlace.addressName,
+              roadAddressName: selectedNaverPlace.roadAddressName,
+              latitude: selectedNaverPlace.latitude,
+              longitude: selectedNaverPlace.longitude,
+              city,
+              district,
+            },
+            department: mDept.trim() || undefined,
+            category: mCategory,
+          }
+        : {
+            mode: "manual" as const,
+            name,
+            department: mDept.trim() || undefined,
+            roadAddress,
+            city,
+            district,
+            category: mCategory,
+          };
+
       const res = await fetch("/api/workplaces", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          mode: "manual",
-          name,
-          department: mDept.trim() || undefined,
-          roadAddress,
-          city,
-          district,
-          category: mCategory,
-        }),
+        body: JSON.stringify(body),
       });
       const data: {
         workplace?: { id: string; name: string; department: string | null };
@@ -375,11 +447,83 @@ export function ExtractedCardEditor({
                 <CollapsibleContent className="mt-2 space-y-2 rounded-md border bg-background p-3">
                   <div className="space-y-1">
                     <Label>근로지명 *</Label>
-                    <Input
-                      value={mName}
-                      onChange={(e) => setMName(e.target.value)}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={mName}
+                        onChange={(e) => {
+                          setMName(e.target.value);
+                          // 이름 바꾸면 이전 선택 무효화
+                          if (selectedNaverPlace) {
+                            setSelectedNaverPlace(null);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void handleNaverSearch();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleNaverSearch()}
+                        disabled={!mName.trim() || naverSearching}
+                      >
+                        {naverSearching ? "..." : "네이버 검색"}
+                      </Button>
+                    </div>
                   </div>
+
+                  {naverResults.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        네이버 결과 (클릭하면 주소/시/구 자동 채움)
+                      </p>
+                      {naverResults.map((place) => (
+                        <button
+                          key={place.id}
+                          type="button"
+                          onClick={() => fillFromNaverPlace(place)}
+                          className="block w-full rounded border bg-background p-2 text-left text-sm hover:border-brand-400"
+                        >
+                          <p className="font-medium">{place.placeName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {place.roadAddressName || place.addressName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {place.city} · {place.district}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {naverSearched &&
+                    !naverSearching &&
+                    naverResults.length === 0 &&
+                    !selectedNaverPlace && (
+                      <p className="text-xs text-muted-foreground">
+                        검색 결과가 없어요. 아래에 직접 입력해주세요.
+                      </p>
+                    )}
+
+                  {selectedNaverPlace && (
+                    <div className="flex items-center justify-between rounded-md bg-brand-50 px-2 py-1.5 text-xs">
+                      <span className="truncate">
+                        📍 네이버 선택: {selectedNaverPlace.placeName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedNaverPlace(null)}
+                        className="ml-2 shrink-0 text-muted-foreground hover:text-red-600"
+                      >
+                        선택 취소
+                      </button>
+                    </div>
+                  )}
+
                   <div className="space-y-1">
                     <Label>부서 (선택)</Label>
                     <Input
@@ -391,7 +535,10 @@ export function ExtractedCardEditor({
                     <Label>도로명 주소 *</Label>
                     <Input
                       value={mRoadAddress}
-                      onChange={(e) => setMRoadAddress(e.target.value)}
+                      onChange={(e) => {
+                        setMRoadAddress(e.target.value);
+                        if (selectedNaverPlace) setSelectedNaverPlace(null);
+                      }}
                       placeholder="예: 서울특별시 서대문구 통일로 11길 27"
                     />
                   </div>
