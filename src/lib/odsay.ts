@@ -1,4 +1,5 @@
-const ODSAY_BASE = "https://api.odsay.com/v1/api/searchPubTransPathT";
+const PROXY_URL = process.env.ODSAY_PROXY_URL;
+const PROXY_SECRET = process.env.ODSAY_PROXY_SECRET;
 
 export type TransitResult = {
   totalMinutes: number | null;
@@ -21,34 +22,44 @@ export async function getTransitTime(
   toLat: number,
   toLng: number,
 ): Promise<TransitResult> {
-  const apiKey = process.env.ODSAY_API_KEY;
-  if (!apiKey) throw new Error("ODSAY_API_KEY not set");
+  if (!PROXY_URL || !PROXY_SECRET) {
+    console.error("ODSAY_PROXY_URL or ODSAY_PROXY_SECRET not set");
+    return { totalMinutes: null };
+  }
 
   const params = new URLSearchParams({
-    apiKey,
     SX: String(fromLng),
     SY: String(fromLat),
     EX: String(toLng),
     EY: String(toLat),
-    OPT: "0",
   });
 
-  const res = await fetch(`${ODSAY_BASE}?${params}`, {
-    next: { revalidate: 86400 },
-  });
-  if (!res.ok) {
-    throw new Error(`ODsay error ${res.status}`);
-  }
-  const data = (await res.json()) as OdsayResponse;
+  try {
+    const res = await fetch(
+      `${PROXY_URL}/odsay/searchPubTransPathT?${params}`,
+      {
+        headers: { "x-proxy-secret": PROXY_SECRET },
+        next: { revalidate: 86400 },
+      },
+    );
+    if (!res.ok) {
+      console.error("ODsay proxy error", res.status);
+      return { totalMinutes: null };
+    }
+    const data = (await res.json()) as OdsayResponse;
 
-  if (data.error) {
-    console.warn("ODsay error:", data.error);
+    if (data.error) {
+      console.warn("ODsay error:", data.error);
+      return { totalMinutes: null };
+    }
+
+    const firstPath = data.result?.path?.[0];
+    const totalTime = firstPath?.info?.totalTime;
+    return { totalMinutes: typeof totalTime === "number" ? totalTime : null };
+  } catch (e) {
+    console.error("ODsay proxy fetch failed", e);
     return { totalMinutes: null };
   }
-
-  const firstPath = data.result?.path?.[0];
-  const totalTime = firstPath?.info?.totalTime;
-  return { totalMinutes: typeof totalTime === "number" ? totalTime : null };
 }
 
 /**
