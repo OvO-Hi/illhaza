@@ -15,6 +15,7 @@ function getSecret(): Uint8Array {
 export type SessionPayload = {
   userId: string;
   role: "USER" | "ADMIN";
+  emailLocal: string; // 이메일의 @ 앞부분 (워터마크 식별자)
 };
 
 export async function signSession(payload: SessionPayload): Promise<string> {
@@ -32,9 +33,14 @@ export async function verifySession(
     const { payload } = await jwtVerify(token, getSecret());
     const userId = payload.userId;
     const role = payload.role;
+    const emailLocal = payload.emailLocal;
     if (typeof userId !== "string") return null;
     if (role !== "USER" && role !== "ADMIN") return null;
-    return { userId, role };
+    return {
+      userId,
+      role,
+      emailLocal: typeof emailLocal === "string" ? emailLocal : "",
+    };
   } catch {
     return null;
   }

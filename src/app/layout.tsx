@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { Toaster } from "@/components/ui/sonner";
 import { NaverMapProvider } from "@/components/NaverMapLoader";
+import { Watermark } from "@/components/Watermark";
+import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,11 +28,12 @@ export const viewport: Viewport = {
   themeColor: "#00462A",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
   return (
     <html lang="ko" className="h-full antialiased">
       <head>
@@ -43,6 +46,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <NaverMapProvider>
+          {user && <Watermark identifier={user.emailLocal} />}
           <div className="flex flex-1 flex-col">
             <div className="flex-1">{children}</div>
             <footer

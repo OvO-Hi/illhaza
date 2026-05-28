@@ -104,7 +104,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  await setSessionCookie({ userId: user.id, role: user.role });
+  const emailLocal = email.split("@")[0] ?? "";
+  await setSessionCookie({ userId: user.id, role: user.role, emailLocal });
 
   // 신뢰 기기 처리
   if (parsed.data.trustDevice) {
