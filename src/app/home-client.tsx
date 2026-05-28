@@ -188,6 +188,11 @@ export function HomeClient({
                 </Button>
               </Link>
             )}
+            <Link href="/contact">
+              <Button size="sm" variant="outline">
+                문의
+              </Button>
+            </Link>
             <Link href="/account">
               <Button size="sm" variant="outline">
                 내 계정
