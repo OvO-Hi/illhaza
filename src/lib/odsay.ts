@@ -1,8 +1,17 @@
 const PROXY_URL = process.env.ODSAY_PROXY_URL;
 const PROXY_SECRET = process.env.ODSAY_PROXY_SECRET;
 
+// ODsay -98: 출도착지가 700m 이내(도보 거리)라 경로 산출 불가. 8분으로 채움.
+const WALKABLE_DISTANCE_MINUTES = 8;
+
 export type TransitResult = {
   totalMinutes: number | null;
+};
+
+type OdsayErrorEntry = {
+  code?: string;
+  msg?: string;
+  message?: string;
 };
 
 type OdsayResponse = {
@@ -13,7 +22,7 @@ type OdsayResponse = {
       };
     }>;
   };
-  error?: Array<{ code?: string; msg?: string }>;
+  error?: OdsayErrorEntry[] | OdsayErrorEntry;
 };
 
 export async function getTransitTime(
@@ -49,6 +58,12 @@ export async function getTransitTime(
     const data = (await res.json()) as OdsayResponse;
 
     if (data.error) {
+      // ODsay는 error를 배열로 줄 때도 있고 단일 객체로 줄 때도 있음
+      const errors = Array.isArray(data.error) ? data.error : [data.error];
+      // -98 (700m 이내): 도보 거리로 간주
+      if (errors.some((e) => e?.code === "-98")) {
+        return { totalMinutes: WALKABLE_DISTANCE_MINUTES };
+      }
       console.warn("ODsay error:", data.error);
       return { totalMinutes: null };
     }

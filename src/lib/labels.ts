@@ -63,6 +63,15 @@ export const RECOMMEND_TAG_LABELS = {
   CAREER_FIT: "기자·공연기획 등 진로 관심",
 } as const;
 
+/**
+ * 대중교통 분 단위 표시. 10분 이하는 "10분 내"로 묶어서 표기 (도보 거리 포함).
+ */
+export function formatTransitMinutes(min: number | null): string {
+  if (min === null) return "?";
+  if (min <= 10) return "10분 내";
+  return `${min}분`;
+}
+
 export const AUTONOMY_SCORE_LABELS: Record<number, string> = {
   1: "1점 — 계속 업무, 개인 시간 없음",
   2: "2점 — 가끔 여유, 폰 정도만",

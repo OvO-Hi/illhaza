@@ -174,7 +174,7 @@ export function HomeClient({
 
   return (
     <main
-      className="min-h-screen bg-background pb-28"
+      className="min-h-screen bg-background pb-32"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { formatTransitMinutes } from "@/lib/labels";
 
 export type WorkplaceCardData = {
   id: string;
@@ -42,13 +43,17 @@ export function WorkplaceCard({ wp }: { wp: WorkplaceCardData }) {
             {wp.transitMinFromMainGate !== null && (
               <>
                 <span>·</span>
-                <span>정문 {wp.transitMinFromMainGate}분</span>
+                <span>
+                  정문 {formatTransitMinutes(wp.transitMinFromMainGate)}
+                </span>
               </>
             )}
             {wp.transitMinFromBackGate !== null && (
               <>
                 <span>·</span>
-                <span>후문 {wp.transitMinFromBackGate}분</span>
+                <span>
+                  후문 {formatTransitMinutes(wp.transitMinFromBackGate)}
+                </span>
               </>
             )}
           </>

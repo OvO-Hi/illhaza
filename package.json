@@ -11,7 +11,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "backfill:transit": "tsx --env-file=.env scripts/backfill-transit.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

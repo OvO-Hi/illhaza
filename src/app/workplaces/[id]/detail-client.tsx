@@ -19,6 +19,7 @@ import { WorkplaceMap } from "@/components/WorkplaceMap";
 import { ReviewCard, type ReviewCardData } from "@/components/ReviewCard";
 import { MobileHeader } from "@/components/MobileHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { formatTransitMinutes } from "@/lib/labels";
 
 type WorkplaceInfo = {
   id: string;
@@ -108,10 +109,16 @@ export function WorkplaceDetailClient({
           {workplace.category === "OFF_CAMPUS" && (
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {workplace.transitMinFromMainGate !== null && (
-                <span>정문에서 {workplace.transitMinFromMainGate}분</span>
+                <span>
+                  정문에서{" "}
+                  {formatTransitMinutes(workplace.transitMinFromMainGate)}
+                </span>
               )}
               {workplace.transitMinFromBackGate !== null && (
-                <span>후문에서 {workplace.transitMinFromBackGate}분</span>
+                <span>
+                  후문에서{" "}
+                  {formatTransitMinutes(workplace.transitMinFromBackGate)}
+                </span>
               )}
             </div>
           )}
