@@ -66,8 +66,19 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = userReviewSchema.safeParse(body);
   if (!parsed.success) {
+    console.error(
+      "[POST /api/reviews] validation failed:",
+      JSON.stringify(parsed.error.issues, null, 2),
+    );
+    console.error(
+      "[POST /api/reviews] received body:",
+      JSON.stringify(body, null, 2),
+    );
     return NextResponse.json(
-      { error: "입력값 검증 실패", issues: parsed.error.flatten() },
+      {
+        error: parsed.error.issues[0]?.message ?? "입력값 검증 실패",
+        issues: parsed.error.issues,
+      },
       { status: 400 },
     );
   }
