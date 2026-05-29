@@ -29,7 +29,7 @@ const userReviewSchema = z
     tasks: z
       .array(z.nativeEnum(TaskType))
       .min(1, "업무를 1개 이상 선택해주세요"),
-    tasksOtherText: z.string().max(500).default(""),
+    tasksOtherText: z.string().trim().max(500).nullable(),
     autonomyScore: z.number().int().min(1).max(5),
     studyPossibility: z.nativeEnum(StudyPossibility),
     workEnvironment: z.nativeEnum(WorkEnvironment),
@@ -45,15 +45,18 @@ const userReviewSchema = z
         message: "자유 작성은 5자 이상 입력해주세요",
       }),
   })
-  .refine(
-    (data) =>
-      !data.tasks.includes(TaskType.OTHER) ||
-      data.tasksOtherText.trim().length >= 5,
-    {
-      message: "기타 업무 선택 시 5자 이상 설명해주세요",
-      path: ["tasksOtherText"],
-    },
-  );
+  .superRefine((data, ctx) => {
+    if (data.tasks.includes(TaskType.OTHER)) {
+      const t = data.tasksOtherText;
+      if (!t || t.trim().length < 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["tasksOtherText"],
+          message: '"기타" 선택 시 5자 이상 입력해주세요',
+        });
+      }
+    }
+  });
 
 export async function POST(req: NextRequest) {
   let user;
@@ -95,7 +98,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { tasksOtherText, ...rest } = parsed.data;
-  const otherTextTrimmed = tasksOtherText.trim();
+  const otherTextTrimmed = tasksOtherText?.trim() ?? "";
 
   const review = await prisma.$transaction(async (tx) => {
     const created = await tx.review.create({

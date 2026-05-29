@@ -32,7 +32,7 @@ const adminReviewSchema = z.object({
   incomeBracket: z.nativeEnum(IncomeBracket).nullable().optional(),
   incomeBracketPublic: z.boolean().default(true),
   tasks: z.array(z.nativeEnum(TaskType)).default([]),
-  tasksOtherText: z.string().trim().min(5).max(500).nullable().optional(),
+  tasksOtherText: z.string().trim().max(500).nullable().optional(),
   autonomyScore: z.number().int().min(1).max(5).nullable().optional(),
   studyPossibility: z.nativeEnum(StudyPossibility).nullable().optional(),
   workEnvironment: z.nativeEnum(WorkEnvironment).nullable().optional(),
@@ -45,6 +45,17 @@ const adminReviewSchema = z.object({
     .refine((s) => s.trim().length >= 5, {
       message: "자유 작성은 5자 이상 입력해주세요",
     }),
+}).superRefine((data, ctx) => {
+  if (data.tasks.includes(TaskType.OTHER)) {
+    const t = data.tasksOtherText;
+    if (!t || t.trim().length < 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tasksOtherText"],
+        message: '"기타" 선택 시 5자 이상 입력해주세요',
+      });
+    }
+  }
 });
 
 export async function POST(req: NextRequest) {
