@@ -46,10 +46,14 @@ export function HomeClient({
   initialWorkplaces,
   initialCityGroups,
   userRole,
+  totalWorkplaceCount,
+  totalReviewCount,
 }: {
   initialWorkplaces: WorkplaceListItem[];
   initialCityGroups: CityGroup[];
   userRole: "USER" | "ADMIN";
+  totalWorkplaceCount: number;
+  totalReviewCount: number;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -308,7 +312,9 @@ export function HomeClient({
           </div>
 
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{workplaces.length}개</span>
+            <span className="text-muted-foreground">
+              근로지 {totalWorkplaceCount}개 · 후기 {totalReviewCount}개
+            </span>
             <div className="flex gap-1">
               {SORT_OPTIONS.map((s) => (
                 <button

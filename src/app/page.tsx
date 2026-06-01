@@ -11,26 +11,29 @@ export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [workplaces, cityDistrictRows] = await Promise.all([
-    prisma.workplace.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 50,
-      include: {
-        _count: {
-          select: { reviews: { where: { status: "PUBLISHED" } } },
+  const [workplaces, cityDistrictRows, totalWorkplaceCount, totalReviewCount] =
+    await Promise.all([
+      prisma.workplace.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          _count: {
+            select: { reviews: { where: { status: "PUBLISHED" } } },
+          },
+          reviews: {
+            where: { status: "PUBLISHED" },
+            select: { overallRating: true },
+          },
         },
-        reviews: {
-          where: { status: "PUBLISHED" },
-          select: { overallRating: true },
-        },
-      },
-    }),
-    prisma.workplace.findMany({
-      select: { city: true, district: true },
-      distinct: ["city", "district"],
-      orderBy: [{ city: "asc" }, { district: "asc" }],
-    }),
-  ]);
+      }),
+      prisma.workplace.findMany({
+        select: { city: true, district: true },
+        distinct: ["city", "district"],
+        orderBy: [{ city: "asc" }, { district: "asc" }],
+      }),
+      prisma.workplace.count(),
+      prisma.review.count({ where: { status: "PUBLISHED" } }),
+    ]);
 
   const initialWorkplaces: WorkplaceListItem[] = workplaces.map((wp) => {
     const ratings = wp.reviews
@@ -68,6 +71,8 @@ export default async function HomePage() {
       initialWorkplaces={initialWorkplaces}
       initialCityGroups={initialCityGroups}
       userRole={user.role}
+      totalWorkplaceCount={totalWorkplaceCount}
+      totalReviewCount={totalReviewCount}
     />
   );
 }
