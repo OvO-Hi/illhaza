@@ -215,6 +215,12 @@ export default function LoginPage() {
               {submitting ? "확인 중..." : "로그인"}
             </Button>
 
+            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+              하루에 보낼 수 있는 메일 양이 100건으로 한정되어 있고 그 이상부터는
+              개발자벗의 카드를 통해 유료결제가 된 후 메일이 발송되니, 메일이 오지
+              않더라도 재전송을 누르기 전에 스팸 메일함을 먼저 확인해주세요. 🥹
+            </div>
+
             <div className="flex items-center justify-between text-xs">
               <button
                 type="button"
